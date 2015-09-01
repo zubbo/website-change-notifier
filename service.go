@@ -2,20 +2,27 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 )
 
 var (
 	httpClient           *http.Client = &http.Client{}
 	cachedWebsiteContent []byte
-	defaultUrl           string = "http://www.google.com"
-	defaultEmail         string = "your@email.com"
+	websiteUrl           string
+	emailAddress         string
+	pollInterval         time.Duration
 )
 
-func main() {
+func loadConfig() {
+	flag.StringVar(&websiteUrl, "url", "http://google.com", "Website url to check")
+	flag.StringVar(&websiteUrl, "email", "your@email.com", "Notification email address")
+	flag.DurationVar(&pollInterval, "poll", 5*time.Second, "Poll interval period")
+	flag.Parse()
 }
 
 func IsTextDifferent(t1, t2 []byte) bool {
@@ -49,12 +56,26 @@ func CheckContent(url string) error {
 
 	if IsTextDifferent(cachedWebsiteContent, content) {
 		cachedWebsiteContent = content
-		SendMail(defaultEmail, fmt.Sprintf("url %s has changed", url))
+		SendMail(emailAddress, fmt.Sprintf("url [%s] has changed", url))
 	}
+
 	return nil
 }
 
 func SendMail(email string, content string) {
 	log.Printf("email sent to %s with content %s", email, content)
-	// implement connection with mail server
+	// implement connection with external mail server and send
+}
+
+func main() {
+	loadConfig()
+	go func() {
+		for _ = range time.NewTicker(pollInterval).C {
+			log.Println("tick")
+			CheckContent(websiteUrl)
+		}
+	}()
+
+	log.Println("Content checking service started...")
+	_ = http.ListenAndServe("localhost:8080", nil)
 }
