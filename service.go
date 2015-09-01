@@ -20,7 +20,7 @@ var (
 
 func loadConfig() {
 	flag.StringVar(&websiteUrl, "url", "http://google.com", "Website url to check")
-	flag.StringVar(&websiteUrl, "email", "your@email.com", "Notification email address")
+	flag.StringVar(&emailAddress, "email", "your@email.com", "Notification email address")
 	flag.DurationVar(&pollInterval, "poll", 5*time.Second, "Poll interval period")
 	flag.Parse()
 }
