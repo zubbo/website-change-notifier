@@ -7,16 +7,22 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/smtp"
 	"net/url"
 	"strings"
 	"time"
 )
 
 var (
-	httpClient   *http.Client = &http.Client{}
-	urlFlag      UrlFlag
-	emailAddress string
-	pollInterval time.Duration
+	httpClient       *http.Client = &http.Client{}
+	urlFlag          UrlFlag
+	pollInterval     time.Duration
+	recipientAddress string
+	senderAddress    string
+	smtpUser         string
+	smtpPass         string
+	smtpHost         string
+	smtpPort         string
 )
 
 type UrlFlag struct {
@@ -30,8 +36,13 @@ type Website struct {
 
 func loadConfig() {
 	flag.Var(&urlFlag, "urls", "Website url(s) to check")
-	flag.StringVar(&emailAddress, "email", "your@email.com", "Notification email address")
 	flag.DurationVar(&pollInterval, "poll", 5*time.Second, "Poll interval period")
+	flag.StringVar(&recipientAddress, "emailTo", "", "Notification email recipient address")
+	flag.StringVar(&senderAddress, "emailFrom", "", "Notification email sender address")
+	flag.StringVar(&smtpUser, "smtpUser", "", "SMTP Username")
+	flag.StringVar(&smtpPass, "smtpPass", "", "SMTP Password")
+	flag.StringVar(&smtpHost, "smtpHost", "", "SMTP Host")
+	flag.StringVar(&smtpPort, "smtpPort", "25", "SMTP Port")
 	flag.Parse()
 }
 
@@ -82,15 +93,26 @@ func (website *Website) StartNotifier() {
 			changed := website.HasChanged(content)
 			if changed {
 				website.CachedContent = content
-				SendMail(emailAddress, fmt.Sprintf("'url [%s] has changed'", website.Url))
+				go SendMail(recipientAddress, fmt.Sprintf("[%s] content changed", website.Url))
 			}
 		}
 	}()
 }
 
-func SendMail(email string, content string) {
-	log.Printf("email sent to %s with content %s", email, content)
-	// implement connection with external mail server and send
+func SendMail(recipient string, subject string) {
+	auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
+	to := []string{recipient}
+	msg := []byte(fmt.Sprintf(
+		"To: %s\r\n"+
+			"Subject: %s\r\n"+
+			"\r\n"+
+			"This site has recently changed\r\n", recipient, subject))
+
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, senderAddress, to, msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s:%s email sent to %s with subject '%s'", smtpHost, smtpPort, recipient, subject)
 }
 
 func main() {
