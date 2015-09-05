@@ -1,4 +1,4 @@
-# Website change notifier (v0.0.1)
+# Website change notifier (v0.0.2)
 
 A basic notification tool, that polls specified websites and notifies of changes via email
 
@@ -22,15 +22,21 @@ Using Ginkgo testing suite for unit tests
 
 Website notifier has the following flags
 
-- url
+- urls
 - email
 - poll
 
 To run with flags in working directory
 
-$ ./website-change-notifier -url "http://yoururl.com" -email "your@email.com" -poll 10s
+$ ./website-change-notifier -urls=http://yoururl.com -email "your@email.com" -poll 10s
 
+#### Check multiple sites
+
+There is now support for multiple sites, just seperate with a comma
+
+$ ./website-change-notifier -urls=http://yoururl.com,https://www.google.com,http://www.amazon.com
 
 #### TODO
 
-- to scale design to multiple sites, can either run bash script with multiple run flags *OR* can add text file (CSV) functionality to load as multiple go routines
+- custom poll period for each site
+- implement sending mail

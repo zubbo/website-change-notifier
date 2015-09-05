@@ -7,59 +7,85 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
 
 var (
-	httpClient           *http.Client = &http.Client{}
-	cachedWebsiteContent []byte
-	websiteUrl           string
-	emailAddress         string
-	pollInterval         time.Duration
+	httpClient   *http.Client = &http.Client{}
+	urlFlag      UrlFlag
+	emailAddress string
+	pollInterval time.Duration
 )
 
+type UrlFlag struct {
+	urls []*url.URL
+}
+
+type Website struct {
+	Url           *url.URL
+	CachedContent []byte
+}
+
 func loadConfig() {
-	flag.StringVar(&websiteUrl, "url", "http://google.com", "Website url to check")
+	flag.Var(&urlFlag, "urls", "Website url(s) to check")
 	flag.StringVar(&emailAddress, "email", "your@email.com", "Notification email address")
 	flag.DurationVar(&pollInterval, "poll", 5*time.Second, "Poll interval period")
 	flag.Parse()
 }
 
-func IsTextDifferent(t1, t2 []byte) bool {
-	return !bytes.Equal(t1, t2)
+func (uf *UrlFlag) String() string {
+	return fmt.Sprint(uf.urls)
 }
 
-func FetchSiteContent(url string) ([]byte, error) {
-	data, err := httpClient.Get(url)
+func (uf *UrlFlag) Set(value string) error {
+	urlSlice := strings.Split(value, ",")
+	for _, item := range urlSlice {
+		if parsedUrl, err := url.Parse(item); err != nil {
+			return err
+		} else {
+			uf.urls = append(uf.urls, parsedUrl)
+		}
+	}
+	return nil
+}
+
+func (w *Website) FetchSiteContent() []byte {
+	data, err := httpClient.Get(w.Url.String())
 	if err != nil {
-		return nil, err
+		log.Printf("Error fetching content from [%s]: %s", w.Url, err)
+		return nil
 	}
 	defer data.Body.Close()
+
 	content, err := ioutil.ReadAll(data.Body)
-	if err != nil {
-		return nil, err
+	if len(content) == 0 {
+		log.Printf("Warning [%s] is empty", w.Url)
 	}
-	return content, nil
+	return content
 }
 
-func CheckContent(url string) error {
-	content, err := FetchSiteContent(url)
-
-	if err != nil {
-		log.Printf("Error fetching content from [%s]: %s", url, err)
-		return err
+func (w *Website) HasChanged(content []byte) bool {
+	if bytes.Equal(w.CachedContent, content) {
+		return false
 	}
+	return true
+}
 
-	if len(content) == 0 {
-		log.Printf("Warning [%s] is empty", url)
-	}
-
-	if IsTextDifferent(cachedWebsiteContent, content) {
-		cachedWebsiteContent = content
-		SendMail(emailAddress, fmt.Sprintf("url [%s] has changed", url))
-	}
-
-	return nil
+func (website *Website) StartNotifier() {
+	go func() {
+		for _ = range time.NewTicker(pollInterval).C {
+			// log here for demo purposes, could put a verbose debug flag to reduce noise
+			log.Println("...checking ", website.Url)
+			content := website.FetchSiteContent()
+			changed := website.HasChanged(content)
+			if changed {
+				website.CachedContent = content
+				SendMail(emailAddress, fmt.Sprintf("'url [%s] has changed'", website.Url))
+			}
+		}
+	}()
 }
 
 func SendMail(email string, content string) {
@@ -69,12 +95,10 @@ func SendMail(email string, content string) {
 
 func main() {
 	loadConfig()
-	go func() {
-		for _ = range time.NewTicker(pollInterval).C {
-			log.Println("tick")
-			CheckContent(websiteUrl)
-		}
-	}()
+	for _, aUrl := range urlFlag.urls {
+		website := &Website{Url: aUrl}
+		website.StartNotifier()
+	}
 
 	log.Println("Content checking service started...")
 	_ = http.ListenAndServe("localhost:8080", nil)
