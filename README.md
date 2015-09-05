@@ -49,4 +49,3 @@ There is now support for multiple sites, just seperate with a comma
 #### TODO
 
 - custom poll period for each site
-- implement sending mail
